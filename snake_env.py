@@ -4,11 +4,12 @@ from typing import Optional, Tuple, Dict
 import gymnasium as gym
 from gymnasium import spaces
 from enum import Enum
+from IPython.display import display, clear_output
 
 class Rewards(Enum):
     APPLE = 1.0
     DIE = -1.0
-    STEP = 0.0
+    STEP = -0.01
     APPLE_GAMMA = 0.99
 
 class SnakeEnv(gym.Env):
@@ -49,7 +50,7 @@ class SnakeEnv(gym.Env):
         self.apple = None
         self.steps = 0
         self.steps_since_apple = 0
-        self.max_steps_since_apple = height * width  # safeguard
+        self.max_steps_since_apple = height * width + 1 # leeway
         self.done = False
 
         # Matplotlib state
@@ -80,18 +81,22 @@ class SnakeEnv(gym.Env):
 
     def process_action(self, action: int) -> Tuple[Tuple[int, int], bool]:
         """Translate the 3-action space into movement."""
-        self._rotate_direction(action - 1)  # 0=left,1=straight,2=right -> (-1,0,+1)
+        self._rotate_direction(action - 1)
         head_r, head_c = self.snake[0]
         dr, dc = self._DIRS[self.direction]
         new_head = (head_r + dr, head_c + dc)
 
         # === 1. Wall collision ===
         if self.walls and not (0 <= new_head[0] < self.height and 0 <= new_head[1] < self.width):
-            return self.snake[0], True
+            return new_head, True
+        
+        # Wrap around if no walls
+        if not self.walls:
+            new_head = (new_head[0] % self.height, new_head[1] % self.width)
 
         # === 2. Self collision ===
         if new_head in self.snake[:-1]:
-            return self.snake[0], True
+            return new_head, True
 
         return new_head, False
     
@@ -160,11 +165,11 @@ class SnakeEnv(gym.Env):
             self.fig, self.ax = plt.subplots()
             self.im = self.ax.imshow(img, interpolation="nearest")
             self.ax.set_title("Snake")
-            plt.ion()
-            plt.show()
         else:
             self.im.set_data(img)
-        plt.pause(1 / self.metadata["render_fps"])
+        
+        clear_output(wait=True)
+        display(self.fig)
 
     def close(self):
         if self.fig:
@@ -173,20 +178,18 @@ class SnakeEnv(gym.Env):
 
     # ====== UTILITIES ======
     def _get_obs(self) -> np.ndarray:
-        """Return an RGB image of the current board."""
-        self.board.fill(0.0)
-        # Snake body (green gradient)
+        self.board.fill(0)
+
+        # snake
         for i, (r, c) in enumerate(self.snake):
             val = 0.3 + 0.7 * (1 - i / len(self.snake))
             self.board[r, c] = np.array([0.0, val, 0.0])
-        # Head (bright green)
-        hr, hc = self.snake[0]
-        self.board[hr, hc] = np.array([0.0, 1.0, 0.0])
-        # Apple (red)
+        
+        # apple
         if self.apple:
             ar, ac = self.apple
             self.board[ar, ac] = np.array([1.0, 0.0, 0.0])
-        return self.board.copy()
+        return self.board
     
     def _get_info(self):
         return {"length": len(self.snake), "steps": self.steps}
