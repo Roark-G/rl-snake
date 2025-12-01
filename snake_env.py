@@ -8,8 +8,8 @@ from IPython.display import display, clear_output
 
 class Rewards(Enum):
     APPLE = 1.0
-    DIE = 0
-    STEP = 0
+    DIE = -1.0
+    STEP = -0.01
     APPLE_GAMMA = 0.99
 
 class SnakeEnv(gym.Env):
@@ -115,6 +115,7 @@ class SnakeEnv(gym.Env):
 
         reward = Rewards.STEP.value
         terminated = False
+        truncated = False
 
         if collision:
             reward = Rewards.DIE.value
@@ -136,11 +137,12 @@ class SnakeEnv(gym.Env):
                 self.snake.pop()
 
             if self.steps_since_apple >= self.max_steps_since_apple:
-                terminated = True
+                reward = Rewards.DIE.value
+                truncated = True
                 self.done = True
 
         obs = self._get_obs()
-        return obs, reward, terminated, False, self._get_info()
+        return obs, reward, terminated, truncated, self._get_info()
 
     def render(self):
         if self.render_mode == "ascii":
