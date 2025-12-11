@@ -41,7 +41,9 @@ class SnakeEnv(gym.Env):
         self.observation_space = spaces.Box(
             low=0.0,
             high=1.0,
-            shape=((self.height * self.width * 2) + 4,),  # 1: apple, 1: snake + 4: directions
+            shape=((self.height * self.width * 2) + # board (H*W*2)
+                   4 + # directions (4)
+                   1,), # distance (1)
             dtype=np.float32,
         )
 
@@ -209,15 +211,32 @@ class SnakeEnv(gym.Env):
 
         return self.board
 
+    def manhattan_apple_dist(self):
+        head_r, head_c = self.snake[0]
+        if self.apple:
+            apple_r, apple_c = self.apple
+            manhattan_dist = abs(head_r - apple_r) + abs(head_c - apple_c)
+            # Normalize by max possible distance
+            max_dist = (self.height - 1) + (self.width - 1)
+            normalized_dist = np.array([manhattan_dist / max_dist], dtype=np.float32)
+        else:
+            # No apple (board full)
+            normalized_dist = np.array([0.0], dtype=np.float32)
+        
+        return normalized_dist
+
     def _get_obs(self):
         board = self._update_board()              # (H, W, 2)
-        board_flat = board.reshape(-1)            # (H*W*2,)
+        board_flat = board.reshape(-1)            # (H*W*2, )
 
         direction = np.zeros(4, dtype=np.float32)
         direction[self.direction] = 1.0
 
-        # print("Board shape:", board.shape, "Board flat shape:", board_flat.shape, "Direction shape:", direction.shape)
-        return np.concatenate([board_flat, direction])
+        normalized_dist = self.manhattan_apple_dist()
+
+        return np.concatenate([board_flat,
+                               direction,
+                               normalized_dist])
 
     def _get_info(self):
         return {"length": len(self.snake), "steps": self.steps}
